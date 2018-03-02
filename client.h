@@ -10,16 +10,14 @@
 #ifndef CLIENT_H
 #define CLIENT_H
 
-using namespace std;
-
 class Client
 {
 private:
     int port;
-    std::string ip; 
+    const char * ip; 
 public:
     Client();
-    Client(std::string ip,int port);
+    Client(const char * ip,int port);
     void run();
 };
 
