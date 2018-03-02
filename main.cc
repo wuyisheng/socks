@@ -12,6 +12,4 @@
 int main(int argc, const char * argv[]) {
     Server h(1080);
     h.start();
-    
-    h.stop();
 }
