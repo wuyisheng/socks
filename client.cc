@@ -66,7 +66,7 @@ void Client::run(){
     server_addr.sin_addr.s_addr = server_ip;
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(server_port);
-    printf("try to connect %s:%u",
+    printf("try to connect %s:%u\n",
         inet_ntoa(server_addr.sin_addr),
         ntohs(server_addr.sin_port));
 
