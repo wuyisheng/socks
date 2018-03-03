@@ -119,7 +119,7 @@ void Server::start(){
                         const_cast<char*>(sbuf.data()),sbuf.size(),
                         NI_NUMERICHOST | NI_NUMERICSERV) == 0 ){
                             
-                        std::cout << "[I] Accepted" << in_fd << "(host=" << hbuf << ", port=" << sbuf << ")" << endl;
+                        std::cout << "Accepted:" << in_fd << "(host=" << hbuf << ", port=" << sbuf << ")" << endl;
                     }
 
                     int in_flags = fcntl(in_fd,F_GETFL,0);
@@ -132,11 +132,12 @@ void Server::start(){
                     event.data.fd = in_fd;
                     event.events = EPOLLIN | EPOLLET;
                     if(epoll_ctl(epoll_fd,EPOLL_CTL_ADD,in_fd,&event) ==-1){
-                        printf("fail to add epoll");
+                        printf("fail to add epoll\n");
                         continue;
                     }
                     if(send(in_fd,"Hello, you are connected!\n",26,0) == -1){
-                        perror("fail to send");
+                        printf("fail to send");
+                        continue;
                     }
                     break;
                 }
@@ -153,34 +154,15 @@ void Server::start(){
                         printf("close %d\n",fd);
                         close(fd);
                         continue;
+                    }else{
+                        std::cout <<"says:" <<  buf << endl;
                     }
-                    std::cout << fd << " says: " <<  buf;
                     break;
                 }
             }
         }
     }
     close(sock_fd);
-    // while(1){
-    //     sin_size = sizeof(struct sockaddr_in);
-    //     if((client_fd = accept(sock_fd,
-    //         (struct sockaddr *)& remote_addr,
-    //         (socklen_t*)&sin_size)) ==-1){
-    //             perror("error occurs in accept");
-    //             continue;
-    //     }
-    //     printf("connet:%s:%u\n",
-    //         inet_ntoa(remote_addr.sin_addr),
-    //         ntohs(remote_addr.sin_port));
-    //     if(!fork()){
-    //         if(send(client_fd,"Hello, you are connected!\n",26,0) == -1){
-    //             perror("fail to send");
-    //             close(client_fd);
-    //             exit(0);
-    //         }
-    //     }
-    //     close(client_fd);
-    //}
 }
 
 void Server::stop(){

@@ -76,12 +76,18 @@ void Client::run(){
         perror("fail to connect");
         exit(1);
     }
+
+    if(send(sock_fd,"here\n",4,0) == -1){
+        perror("fail to send");
+    }
+
     if((recvbytes=recv(sock_fd,buf,MAX_DATA_SIZE,0)) == -1){
         perror("fail to recv");
         exit(1);
     }
     buf[recvbytes] = '\0';
     printf("Received: %s",buf);
+
     close(sock_fd);
     exit(0);
 }
