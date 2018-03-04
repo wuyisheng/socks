@@ -1,4 +1,5 @@
 # socks
+
 c++ for socks5 server
 
 ## build && run
@@ -10,5 +11,6 @@ make
 ```
 
 
-Refer to
-1、[rfc1928](https://www.ietf.org/rfc/rfc1928.txt)
+Refer to:
+
+1 [rfc1928](https://www.ietf.org/rfc/rfc1928.txt)

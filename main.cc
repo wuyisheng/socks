@@ -10,6 +10,6 @@
 
 
 int main(int argc, const char * argv[]) {
-    Server h(1080);
-    h.start();
+    Server server;
+    server.forever();
 }

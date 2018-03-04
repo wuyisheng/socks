@@ -20,15 +20,11 @@
 #include <arpa/inet.h>
 
 #define MAX_DATA_SIZE 1000
+#define LOCAL_PORT "6006"
 
 using namespace std;
 
-Client::Client(){
-    this->ip = "127.0.0.1";
-    this->port = 2018;
-};
-
-Client::Client(const char * ip, int port){
+Client::Client(const char * ip, const char * port){
     this->ip = ip;
     this->port = port;
 };
@@ -40,9 +36,9 @@ void Client::run(){
     int recvbytes,sendbytes,len;
 
     in_addr_t server_ip = inet_addr(this->ip);
-    in_port_t server_port = atoi("2018");//TODO
+    in_port_t server_port = atoi(this->port);
     in_addr_t my_ip = inet_addr(this->ip);
-    in_port_t my_port = atoi("2028");
+    in_port_t my_port = atoi(LOCAL_PORT);
 
     if((sock_fd = socket(AF_INET,SOCK_STREAM,0)) == -1){
         perror("fail to creat socket");
