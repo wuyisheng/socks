@@ -21,59 +21,186 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <netdb.h>
+#include <map>
 
 #define SERVER_PORT 3018
 #define MAX_CONNECTION 10
 #define MAX_DATA_SIZE 1000
 #define MAX_EVENT 32
+#define AUTHON_TYPE 0
+
+#define ATYP_IPV4 1
+#define ATYP_DOMAIN_NAME 3
+#define ATYP_IPV6 4
+
+#define REP_succeeded '\x00'
+#define REP_server_failure '\x01'
+#define REP_not_allowed '\x02'
+#define REP_Network_unreachable '\x03'
+#define REP_Host_unreachable '\x04'
+#define REP_refused '\x05'
+#define REP_TTL_expired '\x06'
+#define REP_Command_not_supported '\x07'
+#define REP_Address_not_supported '\x08'
 
 using namespace std;
 
 Section::Section(int inner_fd){
-    this->status = 0;
+    this->status = SectionStatus.init;
     this->inner = inner_fd;
     this->outter = -1;
 };
 
 bool Section::ready(){
-
+    return this->status == SectionStatus.ready;
 };
 
-void Section::handshak(){
-
+bool Section::handshak(){
+    int fd = this->inner;
+    switch(this->status){
+        case SectionStatus.init:
+            char buf[3];
+            int count = read(from,buf,3);
+            char VER = buf[0];
+            char NMETHODS = buf[1];
+            char METHODS = buf[2];
+            if(VER == 0x05){
+                if(METHODS == '\x00'){
+                    if(send(fd,"\x05\x00",2,0) != -1){
+                        this->status = SectionStatus.crequest;
+                        return true;
+                    }
+                }else if(METHODS == '\x02'){
+                    //TODO
+                    if(send(fd,"\x05\x00",2,0) != -1){
+                        this->status = SectionStatus.crequest;
+                        return true;
+                    }
+                }
+            }
+            send(in_fd,"\x05\xFF\n",3,0);
+            return false;
+        case SectionStatus.crequest:
+            char buf[512];
+            int count = read(from,buf,512);
+            if(count > 0){
+                char VER = buf[0];
+                char CMD = buf[1];
+                char RSV = buf[2];
+                char ATYP = buf[3];
+                if (ATYP == ATYP_IPV4){
+                    in_addr thost;
+                    char *y = (char *)&thost;
+                    y[0]=buf[4];
+                    y[1]=buf[5];
+                    y[2]=buf[6];
+                    y[3]=buf[7];
+                    this->host = inet_ntoa(*(struct in_addr *)&thost);
+                    int intport = int((unsigned char)(buffer[8]) << 8 | (unsigned char)(buffer[9])));
+                    this->port = new char[intport.length()];
+                    strcpy(this->port, intport.c_str());
+                }else if (ATYP == ATYP_DOMAIN_NAME){
+                    char host_length = buf[4];
+                    char temp[host_length];
+                    strncpy(temp,buf+5,host_length);
+                    this->host = temp;
+                    int intport = int((unsigned char)(buffer[5+host_length]) << 8 | (unsigned char)(buffer[5+host_length+1])));
+                    this->port = new char[intport.length()];
+                    strcpy(this->port, intport.c_str());
+                }else if (ATYP == ATYP_IPV6){
+                    return false;
+                }
+            }
+            char rep;
+            if((rep=this->connet()) != REP_succeeded){
+                char * reply = '\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00'
+                reply[1]=rep;
+                if(send(fd,reply,10,0) != -1){
+                    this->status = SectionStatus.ready;
+                    return true;
+                }
+            }else{
+                this->close();
+            }
+            break;
+        case SectionStatus.ready:
+        case SectionStatus.close:
+            //do nothing when ready/close
+            break;
+        default:
+            perror("unknow status");
+            return;
+    }
+    return true;
 };
 
-int Section::connet(){
-
+char Section::connet(){
+    int socket_fd = -1;
+    in_addr_t server_ip = inet_addr(this->host);
+    in_port_t server_port = atoi(this->port);
+    struct sockaddr_in target;
+    memset(&target,0,sizeof(target));
+    target.sin_family = AF_INET;
+    target.sin_addr.s_addr = server_ip;
+    target.sin_port = htons(server_port);
+    if(connect(socket_fd,(struct sockaddr*)target,sizeof(target))){
+        this->outter = socket_fd;
+        return REP_succeeded;
+    }else{
+        return REP_Network_unreachable;
+    }
 };
 
-void Section::forward(int from){
-    
+bool Section::forward(int from){
+    int to = from == this->inner ? this->outter: this-> inner;
+    while(true){
+        char buf[512];
+        int count = read(from,buf,512);
+        if(count == -1){
+            if(errno == EAGAIN){
+                continue;
+            }
+        }else if(count ==0){
+            return false;
+        }else if(count > 0){
+            if(send(to,buf,count) != -1){
+                perror("forward send error");
+                return false;
+            }else{
+                return true;
+            }
+        }
+    }
 };
+
+int Section::close(){
+    close(this->inner);
+    close(this->outter);
+}
 /*---section end---*/
 
 SectionPool::SectionPool(){};
 
 void SectionPool::put(Section section){
-    //TODO
+    this->data[section.inner] = section;
 };
 
 void SectionPool::remove(Section section){
-    //TODO
+    this->data.erase(section.inner);
 };
 
 void SectionPool::remove(int fd){
-    //TODO
+    this->data.erase(fd);
 };
 
-Section SectionPool::get(int fd){
-    //TODO
+Section SectionPool::find(int fd){
+    return this->data.erase(fd);
 };
-
-
 /*----section pool end------*/
 
-Server::Server(){};
+Server::Server(){
+    this->pool = SectionPool;
+};
 
 bool Server::set_nonblocking(int fd){
     int sock_flags = fcntl(fd,F_GETFL,0);
@@ -144,36 +271,44 @@ bool Server::accept_connect(struct epoll_event& event,int epoll_fd,int sock_fd){
         std::cout << "nonblocking" << "(host=" << hbuf << endl;
         return false;
     }
-    if(!this->add_into_epoll(event,epoll_fd,in_fd)){
+    if(!this->add_into_epoll(in_fd)){
         printf("fail to add epoll\n");
         return false;
     }
-
-    //TODO add into pool
-
-    if(send(in_fd,"Hello, you are connected!\n",26,0) == -1){
-        printf("fail to send\n");
-        return false;
-    }
+    Section section(in_fd);
+    this->pool.put(section);
     return true;
 };
 
+bool Server::close_connect(int fd){
+    //TODO
+};
+
 void Server::handle(int from){
-    while(true){
-        char buf[512];
-        int count = read(from,buf,512);
-        if(count == -1){
-            if(errno == EAGAIN){
-                continue;
+    Section section = this->pool.find(from); 
+    if(section != NULL){
+        if(section.ready()){
+            if(!section.forward(from)){
+                section.close();
+                this->close_connect(from);
             }
-        }else if(count ==0){
-            printf("close %d\n",from);
-            close(from);
-            continue;
         }else{
-            std::cout <<"says:" <<  buf << endl;
+            if(section.handshak()){
+                if(section.status == SectionStatus.ready){
+                    if(!this->add_into_epoll(section.outter)){
+                        printf("fail to add epoll\n");
+                        return false;
+                    }
+                }
+            }else{
+                // handshak fail
+                section.close();
+                this.close_connect(from);
+            }
         }
-        break;
+    }else{
+        perror("noknow connect");
+        this->close_connect(from);
     }
 };
 
@@ -187,7 +322,10 @@ void Server::forever(){
         perror("fail to create epoll");
         exit(1);
     }
-    if(!this->add_into_epoll(event,epoll_fd,sock_fd)){
+    this->epoll_fd = epoll_fd;
+    this->event = event;
+
+    if(!this->add_into_epoll(sock_fd)){
         perror("fail to add into epoll");
         exit(1);
     }
@@ -201,7 +339,7 @@ void Server::forever(){
                     perror("error in epoll event");
                     close(events[i].data.fd);
             }else if(sock_fd == events[i].data.fd){
-                while(this->accept_connect(event,epoll_fd,sock_fd)){ /*keep empty*/}
+                while(this->accept_connect(sock_fd)){ /*keep empty*/}
             }else{
                 this->handle(events[i].data.fd);
             }

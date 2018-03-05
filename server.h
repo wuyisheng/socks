@@ -13,10 +13,20 @@
 
 using namespace std;
 
+enum SectionStatus: int
+{   
+    init,
+    crequest,
+    ready,
+    close
+};
+
 class Section
 {
 private:
-    int status;
+    int status;  //SectionStatus
+    char * host;
+    char * port;
 public:
     int inner;
     int outter;
@@ -24,7 +34,8 @@ public:
     bool ready();
     void handshak();
     int connet();
-    void forward(int from);
+    bool forward(int from);
+    void close();
 };
 
 class SectionPool
@@ -36,17 +47,20 @@ public:
     void put(Section section);
     void remove(Section section);
     void remove(int fd);
-    Section get(int fd);
+    Section find(int fd);
 };
 
 class Server
 {
 private:
     SectionPool pool;
+    struct epoll_event& event;
+    int epoll_fd;
     int watch_port(int port);
     bool set_nonblocking(int fd);
-    bool add_into_epoll(struct epoll_event& event,int epoll_fd,int sock_fd);
-    bool accept_connect(struct epoll_event& event,int epoll_fd,int sock_fd);
+    bool add_into_epoll(int sock_fd);
+    bool accept_connect(int sock_fd);
+    bool close_connect(int fd);
     void handle(int from);
 public:
     Server();
