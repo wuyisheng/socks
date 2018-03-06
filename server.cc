@@ -23,7 +23,7 @@
 #include <netdb.h>
 #include <map>
 
-#define SERVER_PORT 3018
+#define SERVER_PORT 1080
 #define MAX_CONNECTION 10
 #define MAX_DATA_SIZE 1000
 #define MAX_EVENT 32
@@ -42,6 +42,11 @@
 #define REP_TTL_expired '\x06'
 #define REP_Command_not_supported '\x07'
 #define REP_Address_not_supported '\x08'
+
+
+#define CMD_CONNECT '\x01'
+#define CMD_BIND '\x02'
+#define CMD_UDP_ASSOCIATE '\x03'
 
 using namespace std;
 
@@ -88,6 +93,7 @@ bool Section::handshak(){
                 char CMD = buf[1];
                 char RSV = buf[2];
                 char ATYP = buf[3];
+                this->cmd = CMD;
                 if (ATYP == ATYP_IPV4){
                     in_addr thost;
                     char *y = (char *)&thost;
@@ -135,41 +141,72 @@ bool Section::handshak(){
 };
 
 char Section::connet(){
-    int socket_fd = -1;
-    in_addr_t server_ip = inet_addr(this->host);
-    in_port_t server_port = atoi(this->port);
-    struct sockaddr_in target;
-    memset(&target,0,sizeof(target));
-    target.sin_family = AF_INET;
-    target.sin_addr.s_addr = server_ip;
-    target.sin_port = htons(server_port);
-    if(connect(socket_fd,(struct sockaddr*)target,sizeof(target))){
-        this->outter = socket_fd;
+    if(this->cmd == CMD_CONNECT){
+        int socket_fd = -1;
+        in_addr_t server_ip = inet_addr(this->host);
+        in_port_t server_port = atoi(this->port);
+        struct sockaddr_in target;
+        if((socket_fd = socket(AF_INET,SOCK_STREAM,0)) == -1){
+            perror("fail to create socket");
+            return REP_Network_unreachable;
+        }
+        memset(&target,0,sizeof(target));
+        target.sin_family = AF_INET;
+        target.sin_addr.s_addr = server_ip;
+        target.sin_port = htons(server_port);
+        if(connect(socket_fd,(struct sockaddr*)target,sizeof(target))){
+            this->outter = socket_fd;
+            return REP_succeeded;
+        }else{
+            return REP_Network_unreachable;
+        }
+    }else if(this->cmd == CMD_UDP_ASSOCIATE){
+        int socket_fd = -1;
+        in_addr_t server_ip = inet_addr(this->host);
+        in_port_t server_port = atoi(this->port);
+        struct sockaddr_in target;
+        if((socket_fd = socket(AF_INET,SOCK_DGRAM,0)) == -1){
+            perror("fail to create socket");
+            return REP_Network_unreachable;
+        }
+        memset(&target,0,sizeof(target));
+        target.sin_family = AF_INET;
+        target.sin_addr.s_addr = server_ip;
+        target.sin_port = htons(server_port);
+        if(connect(socket_fd,(struct sockaddr*)target,sizeof(target))){
+            this->outter = socket_fd;
+            return REP_succeeded;
+        }else{
+            return REP_Network_unreachable;
+        }
+        printf("TODO UDP_ASSOCIATE");
         return REP_succeeded;
-    }else{
-        return REP_Network_unreachable;
     }
 };
 
 bool Section::forward(int from){
-    int to = from == this->inner ? this->outter: this-> inner;
-    while(true){
-        char buf[512];
-        int count = read(from,buf,512);
-        if(count == -1){
-            if(errno == EAGAIN){
-                continue;
-            }
-        }else if(count ==0){
-            return false;
-        }else if(count > 0){
-            if(send(to,buf,count) != -1){
-                perror("forward send error");
+    if(this->cmd == CMD_CONNECT){
+        int to = from == this->inner ? this->outter: this-> inner;
+        while(true){
+            char buf[512];
+            int count = read(from,buf,512);
+            if(count == -1){
+                if(errno == EAGAIN){
+                    continue;
+                }
+            }else if(count ==0){
                 return false;
-            }else{
-                return true;
+            }else if(count > 0){
+                if(send(to,buf,count) != -1){
+                    perror("forward send error");
+                    return false;
+                }else{
+                    return true;
+                }
             }
         }
+    }else if(this->cmd == CMD_UDP_ASSOCIATE){
+        printf("TODO UDP_ASSOCIATE");
     }
 };
 

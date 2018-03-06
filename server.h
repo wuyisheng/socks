@@ -27,6 +27,7 @@ private:
     int status;  //SectionStatus
     char * host;
     char * port;
+    char cmd;
 public:
     int inner;
     int outter;
