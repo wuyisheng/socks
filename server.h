@@ -13,14 +13,6 @@
 
 using namespace std;
 
-enum SectionStatus: int
-{   
-    init,
-    crequest,
-    ready,
-    close
-};
-
 class Section
 {
 private:
@@ -33,29 +25,30 @@ public:
     int outter;
     Section(int inner_fd);
     bool ready();
-    void handshak();
-    int connet();
+    bool handshak();
+    char connet();
     bool forward(int from);
-    void close();
+    void destory();
 };
 
 class SectionPool
 {
 private:
-    map<int,Section> data;
+    
 public:
+    map<int,Section> data;
     SectionPool();
     void put(Section section);
     void remove(Section section);
     void remove(int fd);
-    Section find(int fd);
+    map<int, Section>::iterator find(int fd);
 };
 
 class Server
 {
 private:
     SectionPool pool;
-    struct epoll_event& event;
+    struct epoll_event* event;
     int epoll_fd;
     int watch_port(int port);
     bool set_nonblocking(int fd);

@@ -43,51 +43,56 @@
 #define REP_Command_not_supported '\x07'
 #define REP_Address_not_supported '\x08'
 
-
 #define CMD_CONNECT '\x01'
 #define CMD_BIND '\x02'
 #define CMD_UDP_ASSOCIATE '\x03'
 
+#define STATUS_INIT 0
+#define STATUS_REQUEST 1
+#define STATUS_READY 2
+#define STATUS_CLOSE 3
+
 using namespace std;
 
 Section::Section(int inner_fd){
-    this->status = SectionStatus.init;
+    this->status = STATUS_INIT;
     this->inner = inner_fd;
     this->outter = -1;
 };
 
 bool Section::ready(){
-    return this->status == SectionStatus.ready;
+    return this->status == STATUS_READY;
 };
 
 bool Section::handshak(){
     int fd = this->inner;
     switch(this->status){
-        case SectionStatus.init:
+        case STATUS_INIT:{
             char buf[3];
-            int count = read(from,buf,3);
+            int count = read(fd,buf,3);
             char VER = buf[0];
             char NMETHODS = buf[1];
             char METHODS = buf[2];
             if(VER == 0x05){
                 if(METHODS == '\x00'){
                     if(send(fd,"\x05\x00",2,0) != -1){
-                        this->status = SectionStatus.crequest;
+                        this->status = STATUS_REQUEST;
                         return true;
                     }
                 }else if(METHODS == '\x02'){
                     //TODO
                     if(send(fd,"\x05\x00",2,0) != -1){
-                        this->status = SectionStatus.crequest;
+                        this->status = STATUS_REQUEST;
                         return true;
                     }
                 }
             }
-            send(in_fd,"\x05\xFF\n",3,0);
+            send(fd,"\x05\xFF\n",3,0);
             return false;
-        case SectionStatus.crequest:
+        }
+        case STATUS_REQUEST:{
             char buf[512];
-            int count = read(from,buf,512);
+            int count = read(fd,buf,512);
             if(count > 0){
                 char VER = buf[0];
                 char CMD = buf[1];
@@ -102,40 +107,46 @@ bool Section::handshak(){
                     y[2]=buf[6];
                     y[3]=buf[7];
                     this->host = inet_ntoa(*(struct in_addr *)&thost);
-                    int intport = int((unsigned char)(buffer[8]) << 8 | (unsigned char)(buffer[9])));
-                    this->port = new char[intport.length()];
-                    strcpy(this->port, intport.c_str());
+                    int intport =(int)(buf[8]) << 8 | (int)(buf[9]);
+                    char buffer [33];
+                    sprintf(buffer, "%d", intport);
+                    this->port=buffer;
                 }else if (ATYP == ATYP_DOMAIN_NAME){
                     char host_length = buf[4];
                     char temp[host_length];
                     strncpy(temp,buf+5,host_length);
                     this->host = temp;
-                    int intport = int((unsigned char)(buffer[5+host_length]) << 8 | (unsigned char)(buffer[5+host_length+1])));
-                    this->port = new char[intport.length()];
-                    strcpy(this->port, intport.c_str());
+                    int intport = (int)(buf[5+host_length]) << 8 | (int)(buf[5+host_length+1]);
+                    char buffer [33];
+                    sprintf(buffer, "%d", intport);
+                    this->port=buffer;
                 }else if (ATYP == ATYP_IPV6){
                     return false;
                 }
             }
             char rep;
             if((rep=this->connet()) != REP_succeeded){
-                char * reply = '\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00'
-                reply[1]=rep;
+                char * reply =(char *)"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00";
+                reply[1] = rep;
                 if(send(fd,reply,10,0) != -1){
-                    this->status = SectionStatus.ready;
+                    this->status = STATUS_READY;
                     return true;
                 }
             }else{
-                this->close();
+                this->destory();
             }
             break;
-        case SectionStatus.ready:
-        case SectionStatus.close:
+        }
+        case STATUS_READY:
+        case STATUS_CLOSE:{
             //do nothing when ready/close
             break;
-        default:
+        }
+        default:{
             perror("unknow status");
-            return;
+            return false;
+        }
+
     }
     return true;
 };
@@ -154,7 +165,7 @@ char Section::connet(){
         target.sin_family = AF_INET;
         target.sin_addr.s_addr = server_ip;
         target.sin_port = htons(server_port);
-        if(connect(socket_fd,(struct sockaddr*)target,sizeof(target))){
+        if(connect(socket_fd,(struct sockaddr *)&target,sizeof(target))){
             this->outter = socket_fd;
             return REP_succeeded;
         }else{
@@ -173,7 +184,7 @@ char Section::connet(){
         target.sin_family = AF_INET;
         target.sin_addr.s_addr = server_ip;
         target.sin_port = htons(server_port);
-        if(connect(socket_fd,(struct sockaddr*)target,sizeof(target))){
+        if(connect(socket_fd,(struct sockaddr*)&target,sizeof(target))){
             this->outter = socket_fd;
             return REP_succeeded;
         }else{
@@ -197,7 +208,7 @@ bool Section::forward(int from){
             }else if(count ==0){
                 return false;
             }else if(count > 0){
-                if(send(to,buf,count) != -1){
+                if(send(to,buf,count,0) != -1){
                     perror("forward send error");
                     return false;
                 }else{
@@ -210,7 +221,7 @@ bool Section::forward(int from){
     }
 };
 
-int Section::close(){
+void Section::destory(){
     close(this->inner);
     close(this->outter);
 }
@@ -219,7 +230,7 @@ int Section::close(){
 SectionPool::SectionPool(){};
 
 void SectionPool::put(Section section){
-    this->data[section.inner] = section;
+    this->data.insert(std::make_pair(section.inner, section));
 };
 
 void SectionPool::remove(Section section){
@@ -230,14 +241,12 @@ void SectionPool::remove(int fd){
     this->data.erase(fd);
 };
 
-Section SectionPool::find(int fd){
-    return this->data.erase(fd);
+map<int, Section>::iterator SectionPool::find(int fd){
+    return this->data.find(fd);
 };
 /*----section pool end------*/
 
-Server::Server(){
-    this->pool = SectionPool;
-};
+Server::Server(){};
 
 bool Server::set_nonblocking(int fd){
     int sock_flags = fcntl(fd,F_GETFL,0);
@@ -275,13 +284,14 @@ int Server::watch_port(int port){
     return sock_fd;
 };
 
-bool Server::add_into_epoll(struct epoll_event& event,int epoll_fd,int sock_fd){
+bool Server::add_into_epoll(int sock_fd){
+    struct epoll_event event = (struct epoll_event)*this->event;
     event.data.fd = sock_fd;
     event.events = EPOLLIN | EPOLLET;
-    return epoll_ctl(epoll_fd,EPOLL_CTL_ADD,sock_fd,&event) != -1;
+    return epoll_ctl(this->epoll_fd,EPOLL_CTL_ADD,sock_fd,&event) != -1;
 };
 
-bool Server::accept_connect(struct epoll_event& event,int epoll_fd,int sock_fd){
+bool Server::accept_connect(int sock_fd){
     struct sockaddr in_addr;
     socklen_t in_len = sizeof(in_addr);
     int in_fd;
@@ -322,25 +332,25 @@ bool Server::close_connect(int fd){
 };
 
 void Server::handle(int from){
-    Section section = this->pool.find(from); 
-    if(section != NULL){
+    map<int, Section>::iterator iter = this->pool.find(from); 
+    if(iter != this->pool.data.end()){
+        Section section = iter->second;
         if(section.ready()){
             if(!section.forward(from)){
-                section.close();
+                section.destory();
                 this->close_connect(from);
             }
         }else{
             if(section.handshak()){
-                if(section.status == SectionStatus.ready){
+                if(section.ready()){
                     if(!this->add_into_epoll(section.outter)){
                         printf("fail to add epoll\n");
-                        return false;
                     }
                 }
             }else{
                 // handshak fail
-                section.close();
-                this.close_connect(from);
+                section.destory();
+                this->close_connect(from);
             }
         }
     }else{
@@ -360,7 +370,7 @@ void Server::forever(){
         exit(1);
     }
     this->epoll_fd = epoll_fd;
-    this->event = event;
+    this->event = &event;
 
     if(!this->add_into_epoll(sock_fd)){
         perror("fail to add into epoll");
