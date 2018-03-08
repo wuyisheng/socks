@@ -64,91 +64,111 @@ bool Section::ready(){
     return this->status == STATUS_READY;
 };
 
-bool Section::handshak(){
+bool Section::handshake(){
     int fd = this->inner;
-    switch(this->status){
-        case STATUS_INIT:{
-            char buf[3];
-            int count = read(fd,buf,3);
-            char VER = buf[0];
-            char NMETHODS = buf[1];
-            char METHODS = buf[2];
-            if(VER == 0x05){
-                if(METHODS == '\x00'){
-                    if(send(fd,"\x05\x00",2,0) != -1){
-                        this->status = STATUS_REQUEST;
-                        return true;
-                    }
-                }else if(METHODS == '\x02'){
-                    //TODO
-                    if(send(fd,"\x05\x00",2,0) != -1){
-                        this->status = STATUS_REQUEST;
-                        return true;
-                    }
-                }
+    while(1){
+        char buf[512];
+        int count = read(fd,buf,512);
+        if(count == -1){
+            if(errno == EAGAIN){
+                continue;
             }
-            send(fd,"\x05\xFF\n",3,0);
+        }else if(count == 0){
             return false;
-        }
-        case STATUS_REQUEST:{
-            char buf[512];
-            int count = read(fd,buf,512);
-            if(count > 0){
-                char VER = buf[0];
-                char CMD = buf[1];
-                char RSV = buf[2];
-                char ATYP = buf[3];
-                this->cmd = CMD;
-                if (ATYP == ATYP_IPV4){
-                    in_addr thost;
-                    char *y = (char *)&thost;
-                    y[0]=buf[4];
-                    y[1]=buf[5];
-                    y[2]=buf[6];
-                    y[3]=buf[7];
-                    this->host = inet_ntoa(*(struct in_addr *)&thost);
-                    int intport =(int)(buf[8]) << 8 | (int)(buf[9]);
-                    char buffer [33];
-                    sprintf(buffer, "%d", intport);
-                    this->port=buffer;
-                }else if (ATYP == ATYP_DOMAIN_NAME){
-                    char host_length = buf[4];
-                    char temp[host_length];
-                    strncpy(temp,buf+5,host_length);
-                    this->host = temp;
-                    int intport = (int)(buf[5+host_length]) << 8 | (int)(buf[5+host_length+1]);
-                    char buffer [33];
-                    sprintf(buffer, "%d", intport);
-                    this->port=buffer;
-                }else if (ATYP == ATYP_IPV6){
+        }else{
+            std::cout <<"buf:" <<  (buf[0] == '\x05') << (int)buf[1] << (int)buf[3] << (int)buf[4] << (int)buf[5] << endl;
+            switch(this->status){
+                case STATUS_INIT:{
+                    cout << "STATUS_INIT" << this->status << endl;
+                    char VER = buf[0];
+                    char NMETHODS = buf[1];
+                    char METHODS = buf[2];
+                    if(VER == '\x05'){
+                        if(METHODS == '\x00'){
+                            cout << "METHODS" << endl;
+                            if(send(fd,"\x05\x00",2,0) != -1){
+                                this->status = STATUS_REQUEST;
+                                cout << "done send" << this->status << endl;
+                                return true;
+                            }
+                        }else if(METHODS == '\x02'){
+                            //TODO
+                            if(send(fd,"\x05\x00",2,0) != -1){
+                                this->status = STATUS_REQUEST;
+                                return true;
+                            }
+                        }
+                    }
+                    cout << "reject connection" << endl;
+                    send(fd,"\x05\xFF",2,0);
+                    return false;
+                }
+                case STATUS_REQUEST:{
+                    cout << "STATUS_REQUEST" << endl;
+                    char VER = buf[0];
+                    char CMD = buf[1];
+                    char RSV = buf[2];
+                    char ATYP = buf[3];
+                    this->cmd = CMD;
+                    if (ATYP == ATYP_IPV4){
+                        in_addr thost;
+                        char *y = (char *)&thost;
+                        y[0]=buf[4];
+                        y[1]=buf[5];
+                        y[2]=buf[6];
+                        y[3]=buf[7];
+                        this->host = inet_ntoa(*(struct in_addr *)&thost);
+
+                        int intport =((int)(buf[8]) << 8) + (int)((uint8_t)buf[9]);
+                        char buffer [4];
+                        sprintf(buffer, "%d", intport);
+                        this->port=buffer;
+                    }else if (ATYP == ATYP_DOMAIN_NAME){
+                        char host_length = buf[4];
+                        char temp[host_length];
+                        strncpy(temp,buf+5,host_length);
+                        this->host = temp;
+
+                        int intport =((int)(buf[8]) << 8) + (int)((uint8_t)buf[9]);
+                        char buffer [4];
+                        sprintf(buffer, "%d", intport);
+                        this->port=buffer;
+                    }else if (ATYP == ATYP_IPV6){
+                        return false;
+                    }
+                    char rep;
+                    if((rep=this->connet()) == REP_succeeded){
+                        cout << "success" << endl;
+                        const char * reply = "\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00";
+                        if(send(fd,reply,10,0) != -1){
+                            this->status = STATUS_READY;
+                            return true;
+                        }else{
+                            perror("send error");
+                            return false;
+                        }
+                    }/*else{
+                        //TODO
+                        //send rep to tell remote client what fail reason is 
+                    }*/else{  
+                        perror("connet error");
+                        return false;
+                    }
+                    break;
+                }
+                case STATUS_READY:
+                case STATUS_CLOSE:{
+                    //do nothing when ready/close
+                    break;
+                }
+                default:{
+                    perror("unknow status");
                     return false;
                 }
             }
-            char rep;
-            if((rep=this->connet()) != REP_succeeded){
-                char * reply =(char *)"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00";
-                reply[1] = rep;
-                if(send(fd,reply,10,0) != -1){
-                    this->status = STATUS_READY;
-                    return true;
-                }
-            }else{
-                this->destory();
-            }
-            break;
+            return true;
         }
-        case STATUS_READY:
-        case STATUS_CLOSE:{
-            //do nothing when ready/close
-            break;
-        }
-        default:{
-            perror("unknow status");
-            return false;
-        }
-
     }
-    return true;
 };
 
 char Section::connet(){
@@ -161,14 +181,16 @@ char Section::connet(){
             perror("fail to create socket");
             return REP_Network_unreachable;
         }
-        memset(&target,0,sizeof(target));
+        bzero((char *)&target,sizeof(target));
         target.sin_family = AF_INET;
         target.sin_addr.s_addr = server_ip;
         target.sin_port = htons(server_port);
-        if(connect(socket_fd,(struct sockaddr *)&target,sizeof(target))){
+
+        if(connect(socket_fd,(struct sockaddr *)&target,sizeof(target)) != -1){
             this->outter = socket_fd;
             return REP_succeeded;
         }else{
+            perror("connect fail");
             return REP_Network_unreachable;
         }
     }else if(this->cmd == CMD_UDP_ASSOCIATE){
@@ -196,7 +218,9 @@ char Section::connet(){
 };
 
 bool Section::forward(int from){
+    cout << "forwarding" << endl;
     if(this->cmd == CMD_CONNECT){
+        cout << "CMD_CONNECT" << endl;
         int to = from == this->inner ? this->outter: this-> inner;
         while(true){
             char buf[512];
@@ -209,39 +233,53 @@ bool Section::forward(int from){
                 return false;
             }else if(count > 0){
                 if(send(to,buf,count,0) != -1){
+                    cout << "success forward" << endl;
+                    return true;
+                }else{
                     perror("forward send error");
                     return false;
-                }else{
-                    return true;
                 }
             }
         }
     }else if(this->cmd == CMD_UDP_ASSOCIATE){
         printf("TODO UDP_ASSOCIATE");
+        return false;
     }
 };
 
 void Section::destory(){
-    close(this->inner);
-    close(this->outter);
+    if(this->inner != -1 )close(this->inner);
+    if(this->outter != -1 )close(this->outter);
+    this->inner = -1;
+    this->outter = -1;
 }
 /*---section end---*/
 
 SectionPool::SectionPool(){};
 
-void SectionPool::put(Section section){
-    this->data.insert(std::make_pair(section.inner, section));
+void SectionPool::put(Section* section){
+    this->data[(*section).inner] = section;
 };
 
-void SectionPool::remove(Section section){
-    this->data.erase(section.inner);
+void SectionPool::update(int fd,Section* section){
+    this->data[fd] = section;
+};
+
+void SectionPool::remove(Section* section){
+    this->data.erase((*section).inner);
+    if((*section).outter != -1)this->data.erase((*section).outter);
+    delete section;
 };
 
 void SectionPool::remove(int fd){
-    this->data.erase(fd);
+    map<int, Section*>::iterator iter = this->data.find(fd);
+    if(iter != this->data.end()){
+        Section* section = iter->second;
+        return this->remove(section);
+    }
 };
 
-map<int, Section>::iterator SectionPool::find(int fd){
+map<int, Section*>::iterator SectionPool::find(int fd){
     return this->data.find(fd);
 };
 /*----section pool end------*/
@@ -304,25 +342,25 @@ bool Server::accept_connect(int sock_fd){
         }
     }
 
-    std::string hbuf(NI_MAXHOST,'\0');
-    std::string sbuf(NI_MAXSERV,'\0');
+    string hbuf(NI_MAXHOST,'\0');
+    string sbuf(NI_MAXSERV,'\0');
     if(getnameinfo(&in_addr,in_len,
         const_cast<char*>(hbuf.data()),hbuf.size(),
         const_cast<char*>(sbuf.data()),sbuf.size(),
         NI_NUMERICHOST | NI_NUMERICSERV) == 0 ){
             
-        std::cout << "Accepted:" << in_fd << "(host=" << hbuf << ", port=" << sbuf << ")" << endl;
+        cout << "Accepted:" << in_fd << "(host=" << hbuf << ", port=" << sbuf << ")" << endl;
     }
 
     if(!this->set_nonblocking(in_fd)){
-        std::cout << "nonblocking" << "(host=" << hbuf << endl;
+        cout << "fail to set nonblocking" << endl;
         return false;
     }
     if(!this->add_into_epoll(in_fd)){
-        printf("fail to add epoll\n");
+        cout << "fail to add epoll" << endl;
         return false;
     }
-    Section section(in_fd);
+    Section* section = new Section(in_fd);
     this->pool.put(section);
     return true;
 };
@@ -332,24 +370,29 @@ bool Server::close_connect(int fd){
 };
 
 void Server::handle(int from){
-    map<int, Section>::iterator iter = this->pool.find(from); 
+    map<int, Section*>::iterator iter = this->pool.data.find(from);
     if(iter != this->pool.data.end()){
-        Section section = iter->second;
-        if(section.ready()){
-            if(!section.forward(from)){
-                section.destory();
-                this->close_connect(from);
-            }
-        }else{
-            if(section.handshak()){
-                if(section.ready()){
-                    if(!this->add_into_epoll(section.outter)){
-                        printf("fail to add epoll\n");
+        Section* section = iter->second;
+        if(!(*section).ready()){
+            cout << "try handshake,fd :" << from << endl;
+            if((*section).handshake()){
+                if((*section).ready()){
+                    this->pool.update((*section).outter,section);
+                    if(!this->add_into_epoll((*section).outter)){
+                        perror("fail to add epoll\n");
                     }
                 }
             }else{
-                // handshak fail
-                section.destory();
+                cout << "handshak fail , fd:" << from << endl;
+                (*section).destory();
+                this->pool.remove(section);
+                this->close_connect(from);
+            }
+        }else{
+            cout << "try forward,fd:" << from << endl;
+            if(!(*section).forward(from)){
+                (*section).destory();
+                this->pool.remove(section);
                 this->close_connect(from);
             }
         }
@@ -360,8 +403,6 @@ void Server::handle(int from){
 };
 
 void Server::forever(){
-    cout << "start" << endl;
-
     int epoll_fd;
     struct epoll_event event,events[MAX_EVENT];
     int sock_fd = this->watch_port(SERVER_PORT);
@@ -377,8 +418,10 @@ void Server::forever(){
         exit(1);
     }
 
+    cout << "waiting connect" << endl;
     while(true){
         int n = epoll_wait(epoll_fd,events,MAX_EVENT,-1);
+        cout << "connect come" << endl;
         for(int i =0;i<n; ++i){
             if(events[i].events & EPOLLERR || 
                 events[i].events & EPOLLHUP ||

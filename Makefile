@@ -1,5 +1,5 @@
 all : main.o server.o test.o client.o
-	g++ -o server main.o server.o
+	g++ -o server main.o server.o -g -ggdb
 	g++ -o test test.o client.o
 
 main.o : main.cc server.h

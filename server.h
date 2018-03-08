@@ -25,7 +25,7 @@ public:
     int outter;
     Section(int inner_fd);
     bool ready();
-    bool handshak();
+    bool handshake();
     char connet();
     bool forward(int from);
     void destory();
@@ -33,15 +33,14 @@ public:
 
 class SectionPool
 {
-private:
-    
 public:
-    map<int,Section> data;
+    map<int,Section*> data;
     SectionPool();
-    void put(Section section);
-    void remove(Section section);
+    void put(Section* section);
+    void update(int fd,Section* section);
+    void remove(Section* section);
     void remove(int fd);
-    map<int, Section>::iterator find(int fd);
+    map<int, Section*>::iterator find(int fd);
 };
 
 class Server
