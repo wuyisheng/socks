@@ -104,12 +104,12 @@ bool Section::handshake(){
                     return false;
                 }
                 case STATUS_REQUEST:{
-                    cout << "STATUS_REQUEST" << endl;
                     char VER = buf[0];
                     char CMD = buf[1];
                     char RSV = buf[2];
                     char ATYP = buf[3];
                     this->cmd = CMD;
+                    cout << "STATUS_REQUEST:" << (uint8_t)CMD << endl;
                     if (ATYP == ATYP_IPV4){
                         in_addr thost;
                         char *y = (char *)&thost;
@@ -136,6 +136,7 @@ bool Section::handshake(){
                     }else if (ATYP == ATYP_IPV6){
                         return false;
                     }
+                    cout << this->host << ":" << this->port << endl;
                     char rep;
                     if((rep=this->connet()) == REP_succeeded){
                         cout << "success" << endl;
@@ -194,6 +195,7 @@ char Section::connet(){
             return REP_Network_unreachable;
         }
     }else if(this->cmd == CMD_UDP_ASSOCIATE){
+        printf("TODO UDP_ASSOCIATE");
         int socket_fd = -1;
         in_addr_t server_ip = inet_addr(this->host);
         in_port_t server_port = atoi(this->port);
