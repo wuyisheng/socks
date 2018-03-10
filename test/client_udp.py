@@ -4,9 +4,11 @@
 import sys
 import socket
 
+SERVER_IP = "118.89.53.151"
+
 def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    server_address = ('118.89.53.151', 10000)
+    server_address = (SERVER_IP, 10000)
     message = 'hi,yeshen!'
 
     try:

@@ -9,7 +9,7 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     f=open('udp','w')
     try:
-        server_address = ('localhost', 10000)
+        server_address = ('0.0.0.0', 10000)
         sock.bind(server_address)
         f.writelines('Watching %s:%s\n' % server_address)
         f.flush()
