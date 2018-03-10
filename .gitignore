@@ -1,4 +1,3 @@
 *.o
 server
-test
 .vscode/
