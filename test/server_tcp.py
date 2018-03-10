@@ -9,7 +9,7 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     f=open('tcp','w')
     try:
-        server_address = ('localhost', 10500)
+        server_address = ('0.0.0.0', 10500)
         sock.bind(server_address)
         sock.listen(1)
         f.writelines('Watching %s:%s\n' % server_address)
