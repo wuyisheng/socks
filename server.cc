@@ -23,6 +23,8 @@
 #include <netdb.h>
 #include <map>
 
+#define UDP_PORT "10020" //TODO a pool to generate unique udp port
+
 #define SERVER_PORT 1080
 #define MAX_CONNECTION 10
 #define MAX_DATA_SIZE 1000
@@ -53,6 +55,12 @@
 #define STATUS_CLOSE 3
 
 using namespace std;
+
+bool set_nonblocking(int fd){
+    int sock_flags = fcntl(fd,F_GETFL,0);
+    sock_flags |= O_NONBLOCK;
+    return fcntl(fd, F_SETFL, sock_flags) != -1;
+};
 
 Section::Section(int inner_fd){
     this->status = STATUS_INIT;
@@ -136,25 +144,46 @@ bool Section::handshake(){
                     }else if (ATYP == ATYP_IPV6){
                         return false;
                     }
-                    cout << this->host << ":" << this->port << endl;
-                    char rep;
-                    if((rep=this->connet()) == REP_succeeded){
-                        cout << "success" << endl;
-                        const char * reply = "\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00";
-                        if(send(fd,reply,10,0) != -1){
-                            this->status = STATUS_READY;
-                            return true;
-                        }else{
-                            perror("send error");
+                    if(CMD == '\x01'){
+                        cout << this->host << ":" << this->port << endl;
+                        char rep;
+                        if((rep=this->connet()) == REP_succeeded){
+                            const char * reply = "\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00";
+                            if(send(fd,reply,10,0) != -1){
+                                this->status = STATUS_READY;
+                                return true;
+                            }else{
+                                perror("send error");
+                                return false;
+                            }
+                        }/*else{
+                            //TODO
+                            //send rep to tell remote client what fail reason is 
+                        }*/else{  
+                            perror("connet error");
                             return false;
                         }
-                    }/*else{
-                        //TODO
-                        //send rep to tell remote client what fail reason is 
-                    }*/else{  
-                        perror("connet error");
-                        return false;
+                    }else if(CMD == '\x03'){
+                        char rep;
+                        if((rep=this->connet()) == REP_succeeded){
+                            const char * reply = "\x05\x00\x00\x01\xC0\xA8\x00\x5C\x27\x24";
+                            if(send(fd,reply,10,0) != -1){
+                                this->status = STATUS_READY;
+                                return true;
+                            }else{
+                                perror("send error");
+                                return false;
+                            }
+                        }/*else{
+                            //TODO
+                            //send rep to tell remote client what fail reason is 
+                        }*/else{  
+                            perror("connet error");
+                            return false;
+                        }
+
                     }
+                    
                     break;
                 }
                 case STATUS_READY:
@@ -195,27 +224,27 @@ char Section::connet(){
             return REP_Network_unreachable;
         }
     }else if(this->cmd == CMD_UDP_ASSOCIATE){
-        printf("TODO UDP_ASSOCIATE");
-        int socket_fd = -1;
-        in_addr_t server_ip = inet_addr(this->host);
-        in_port_t server_port = atoi(this->port);
-        struct sockaddr_in target;
-        if((socket_fd = socket(AF_INET,SOCK_DGRAM,0)) == -1){
+        cout << "UDP ASSOCIATE";
+        int udp_fd;
+        struct sockaddr_in server_addr;
+        in_addr_t server_ip = inet_addr("0.0.0.0");
+        in_port_t server_port = atoi(UDP_PORT);
+        if((udp_fd=socket(AF_INET,SOCK_DGRAM,0))==-1){
             perror("fail to create socket");
             return REP_Network_unreachable;
         }
-        memset(&target,0,sizeof(target));
-        target.sin_family = AF_INET;
-        target.sin_addr.s_addr = server_ip;
-        target.sin_port = htons(server_port);
-        if(connect(socket_fd,(struct sockaddr*)&target,sizeof(target))){
-            this->outter = socket_fd;
+        set_nonblocking(udp_fd);
+        bzero(&server_addr,sizeof(server_addr));
+        server_addr.sin_family=AF_INET;
+        server_addr.sin_addr.s_addr = server_ip;
+        server_addr.sin_port=htons(server_port);
+        if(bind(udp_fd,(struct sockaddr*)&server_addr,sizeof(server_addr)) !=-1){
+            this->outter = udp_fd;
             return REP_succeeded;
         }else{
+            perror("bind fail");
             return REP_Network_unreachable;
         }
-        printf("TODO UDP_ASSOCIATE");
-        return REP_succeeded;
     }
 };
 
@@ -244,7 +273,49 @@ bool Section::forward(int from){
             }
         }
     }else if(this->cmd == CMD_UDP_ASSOCIATE){
-        printf("TODO UDP_ASSOCIATE");
+        if(from == this->outter){
+            //UDP
+            char buf[512];
+            struct sockaddr_in client_addr;
+            socklen_t addrlen = sizeof(client_addr);
+            int count = recvfrom(from,buf,512,0,(sockaddr*)&client_addr,&addrlen);
+            if(count < 0){
+                if(errno == ECONNRESET){
+                    return false;
+                }else{
+                    perror("read error");
+                }
+            }else if(count == 0){
+                perror("error count is zero");
+                return false;
+            }else{
+                //TODO this is echo
+                //async get data into buf
+                cout << "udp forward:" << buf << endl;
+                if(sendto(from,buf,strlen(buf),0,(sockaddr*)&client_addr,sizeof(client_addr)) != -1){
+                    return true;
+                }else{
+                    return false;
+                }
+            }
+        }else{
+            //TCP
+            while(true){
+                char buf[512];
+                int count = read(from,buf,512);
+                if(count < 0){
+                    if(errno == EAGAIN){
+                        continue;
+                    }
+                }else if(count ==0){
+                    //close connection
+                    return false;
+                }else if(count > 0){
+                    cout << "recv:" << buf << endl;
+                    return true;
+                }
+            }
+        }
         return false;
     }
 };
@@ -288,12 +359,6 @@ map<int, Section*>::iterator SectionPool::find(int fd){
 
 Server::Server(){};
 
-bool Server::set_nonblocking(int fd){
-    int sock_flags = fcntl(fd,F_GETFL,0);
-    sock_flags |= O_NONBLOCK;
-    return fcntl(fd, F_SETFL, sock_flags) != -1;
-};
-
 int Server::watch_port(int port){
     int sock_fd = -1;
     struct sockaddr_in local_addr;
@@ -313,7 +378,7 @@ int Server::watch_port(int port){
         perror("fail to bind socket");
         exit(1);
     }
-    if(!this->set_nonblocking(sock_fd)){
+    if(!set_nonblocking(sock_fd)){
         perror("fail to set nonblock");
         exit(1);
     }
@@ -354,7 +419,7 @@ bool Server::accept_connect(int sock_fd){
         cout << "Accepted:" << in_fd << "(host=" << hbuf << ", port=" << sbuf << ")" << endl;
     }
 
-    if(!this->set_nonblocking(in_fd)){
+    if(!set_nonblocking(in_fd)){
         cout << "fail to set nonblocking" << endl;
         return false;
     }

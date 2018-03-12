@@ -50,7 +50,6 @@ private:
     struct epoll_event* event;
     int epoll_fd;
     int watch_port(int port);
-    bool set_nonblocking(int fd);
     bool add_into_epoll(int sock_fd);
     bool accept_connect(int sock_fd);
     bool close_connect(int fd);
