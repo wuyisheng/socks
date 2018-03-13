@@ -8,7 +8,10 @@
 #ifndef EPOLL_WAPPER_H
 #define EPOLL_WAPPER_H
 
+#include <sys/epoll.h>
 #include <inttypes.h>
+
+#define LBUFF_SIZE 512
 
 enum NetStatus{
     SUCC = '\x00',      //succeeded
@@ -22,23 +25,35 @@ enum NetStatus{
     ADRESS = '\x08'     //Address type not supported
 };
 
+struct LBuff{
+    uint8_t buf[LBUFF_SIZE];
+    LBuff* next;
+}
+
 class EpollNotify{
     public:
-        virtual void onData(uint8_t* buf[],void* data,int fd) = 0;
+        virtual void onData(LBuff* buf,void* ptr,int fd) = 0;
         virtual void onDestory(void* data,int fd) = 0;
 };
 
 class EpollWapper{
     public:
         EpollWapper();
-        void setListener(EpollNotify* listener);
-        NetStatus watchTcp(uint16_t port);
-        NetStatus watchUdp(uint16_t* port);
-        NetStatus createTcp(uint16_t* port);
-        NetStatus createUdp(uint16_t* port);
+        int create(EpollNotify* listener);
+        NetStatus watchTcp(uint16_t port,int* fd,void* ptr);
+        NetStatus watchUdp(uint16_t* port,int* fd,void* ptr);
+        NetStatus createTcp(uint16_t* port,int* fd,void* ptr);
+        NetStatus createUdp(uint16_t* port,int* fd,void* ptr);
+        bool remove(int fd);
+        void wait();
         ~EpollWapper();
     private:
         EpollNotify* listener_;
+        struct epoll_event* event_;
+        struct epoll_event* events_[];
+        int epoll_fd_;
+        bool setNonblocking(int fd);
+        bool addIntoEpoll(int fd,void* ptr);
 };
 
 #endif

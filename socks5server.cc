@@ -21,7 +21,7 @@ void Socks5Server::forever(){
     cout << "test" << endl;
 };
 
-void Socks5Server::onData(uint8_t* buf[],void* data,int fd){
+void Socks5Server::onData(LBuff* buf,void* ptr,int fd){
     cout << "onData" << endl;
 };
 
