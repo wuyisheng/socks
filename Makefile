@@ -1,12 +1,15 @@
-all : main.o server.o proxy.o client.o
-	g++ -o server main.o server.o -g -ggdb
+all : socks5server.o socks5.o epollwapper.o proxy.o client.o 
+	g++ -o socks5server socks5server.o socks5.o epollwapper.o -g -ggdb
 	g++ -o proxy proxy.o client.o
 
-main.o : main.cc server.h
-	g++ -c main.cc
+socks5server.o: socks5server.cc socks5server.h epollwapper.h socks5.h
+	g++ -c socks5server.cc
 
-server.o : server.cc server.h
-	g++ -c server.cc
+epollwapper.o: epollwapper.cc epollwapper.h
+	g++ -c epollwapper.cc
+
+socks5.o:socks5.cc socks5.h
+	g++ -c socks5.cc
 
 proxy.o : proxy.cc client.h
 	g++ -c proxy.cc
@@ -15,5 +18,5 @@ client.o: client.cc client.h
 	g++ -c client.cc
 
 clean:
-	rm -f *.o *.so server proxy
+	rm -f *.o *.so proxy socks5server
 
