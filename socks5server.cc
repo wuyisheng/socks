@@ -21,6 +21,10 @@ void Socks5Server::forever(){
     cout << "test" << endl;
 };
 
+void Socks5Server::onAccept(int fd,int type,void* ptr){
+    cout << "onAccept" << endl;
+}
+
 void Socks5Server::onData(LBuff* buf,void* ptr,int fd){
     cout << "onData" << endl;
 };
