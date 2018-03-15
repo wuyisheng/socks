@@ -8,6 +8,11 @@
 #ifndef SOCKS5_H
 #define SOCKS5_H
 #include <inttypes.h>
+#include "common.h"
+
+#define ACCEPT_VERSION  '\x05'
+#define NO_AUTHON       '\x00'
+#define AUTHON          '\x02'
 
 enum SectionStatus{
     INIT = 0,
@@ -47,7 +52,7 @@ struct Request{
     uint8_t RSV;
     uint8_t ATYP;
     char* DST_ADDR;
-    char* DST_PORT;
+    uint16_t DST_PORT;
 };
 
 struct Replies{
@@ -56,16 +61,14 @@ struct Replies{
     uint8_t RSV;
     uint8_t ATYP;
     char* BND_ADDR;
-    char* BND_PORT;
+    uint16_t BND_PORT;
 };
 
 namespace Socks5{
-    void handleAccept();
-    void handleRequest();
-    void replyMethod();
-    void replyRequestTcp();
-    void replyReqestUdp();
-    void forward();
+    bool decodeRequestVersion(struct RequestVersion* version,struct LinkBuff* buf);
+    bool decodeRequest(struct Request* version,struct LinkBuff* buf);
+    uint8_t* createReplytVersion();
+    uint8_t* createReplies(uint8_t rep,uint16_t port);
 };
 
 #endif

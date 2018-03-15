@@ -10,8 +10,8 @@
 
 #include <sys/epoll.h>
 #include <inttypes.h>
+#include "common.h"
 
-#define LBUFF_SIZE 512
 #define TYPE_WATCH  1
 #define TYPE_TCP    2
 #define TYPE_UDP    4
@@ -27,11 +27,6 @@ enum NetStatus{
     COMMAND = '\x07',   //Command not supported
     ADRESS = '\x08'     //Address type not supported
 };
-
-struct LinkBuff{
-    uint8_t buf[LBUFF_SIZE];
-    LBuff* next;
-}
 
 struct EpollData{
     uint8_t type;

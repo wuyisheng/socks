@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 #include <netdb.h>
+#include "common.h"
 
 #define MAX_EVENT 32
 

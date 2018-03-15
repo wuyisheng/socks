@@ -13,10 +13,10 @@
 
 class Socks5Server: public EpollNotify{
     private:
-        int port;
+        EpollWapper* wapper_;
     public:
-        Socks5Server(int port);
-        void forever();
+        Socks5Server();
+        void forever(int port);
         virtual void onAccept(int fd,int type,void* ptr);
         virtual void onData(LBuff* buf,void* ptr,int fd);
         virtual void onDestory(void* data,int fd);
