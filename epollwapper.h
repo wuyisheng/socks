@@ -17,26 +17,26 @@
 #define TYPE_UDP    4
 
 enum NetStatus{
-    SUCC = '\x00',      //succeeded
-    FAIL = '\x01',      //general SOCKS server failure
-    NOTALLOW = '\x02',  //connection not allowed by ruleset
-    NUREACH = '\x03',   //Network unreachable
-    HUREACH = '\x04',   //Host unreachable
-    CREFUSH = '\x05',   //Connection refused
-    TTL = '\x06',       //TTL expired
-    COMMAND = '\x07',   //Command not supported
-    ADRESS = '\x08'     //Address type not supported
+    NET_SUCC = '\x00',      //succeeded
+    NET_FAIL = '\x01',      //general SOCKS server failure
+    NET_NOTALLOW = '\x02',  //connection not allowed by ruleset
+    NET_NUREACH = '\x03',   //Network unreachable
+    NET_HUREACH = '\x04',   //Host unreachable
+    NET_CREFUSH = '\x05',   //Connection refused
+    NET_TTL = '\x06',       //TTL expired
+    NET_COMMAND = '\x07',   //Command not supported
+    NET_ADRESS = '\x08'     //Address type not supported
 };
 
 struct EpollData{
     uint8_t type;
     void* ptr;
-}
+};
 
 class EpollNotify{
     public:
         virtual void onAccept(int fd,int type,void* ptr) = 0;
-        virtual void onData(LBuff* buf,void* ptr,int fd) = 0;
+        virtual void onData(struct LinkBuff* buf,void* ptr,int fd) = 0;
         virtual void onDestory(void* data,int fd) = 0;
 };
 

@@ -14,6 +14,7 @@
 
 struct LinkBuff{
     uint8_t buf[LBUFF_SIZE];
+    int size;
     LinkBuff* next;
 };
 

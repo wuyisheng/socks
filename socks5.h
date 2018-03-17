@@ -15,10 +15,10 @@
 #define AUTHON          '\x02'
 
 enum SectionStatus{
-    INIT = 0,
-    REQUEST = 1,
-    REDY = 2,
-    CLOSE = 3
+    SS_INIT = 0,
+    SS_REQUEST = 1,
+    SS_REDY = 2,
+    SS_CLOSE = 3
 };
 
 struct UDPPair{
@@ -68,7 +68,7 @@ namespace Socks5{
     bool decodeRequestVersion(struct RequestVersion* version,struct LinkBuff* buf);
     bool decodeRequest(struct Request* version,struct LinkBuff* buf);
     uint8_t* createReplytVersion();
-    uint8_t* createReplies(uint8_t rep,uint16_t port);
+    uint8_t* createReplies(uint8_t rep);
 };
 
 #endif
