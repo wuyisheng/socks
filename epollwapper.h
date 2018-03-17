@@ -14,9 +14,9 @@
 
 #define MAX_CONNECTION 10
 
-#define TYPE_WATCH  1
-#define TYPE_TCP    2
-#define TYPE_UDP    4
+#define TYPE_WATCH  '\x01'
+#define TYPE_TCP    '\x02'
+#define TYPE_UDP    '\x04'
 
 enum NetStatus{
     NET_SUCC = '\x00',      //succeeded
@@ -31,6 +31,7 @@ enum NetStatus{
 };
 
 struct EpollData{
+    int fd;
     uint8_t type;
     void* ptr;
 };
@@ -56,7 +57,6 @@ class EpollWapper{
     private:
         EpollNotify* listener_;
         struct epoll_event* event_;
-        struct epoll_event* events_;
         int epoll_fd_;
         bool setNonblocking(int fd);
         bool addIntoEpoll(int fd,void* ptr);

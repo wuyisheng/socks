@@ -78,7 +78,7 @@ namespace Socks5{
     };
 
     uint8_t* createReplytVersion(){
-        uint8_t *buf=(uint8_t*)malloc(2); 
+        uint8_t *buf=new uint8_t[2](); 
         buf[0] = '\x05';
         buf[1] = '\x00';
         return buf;

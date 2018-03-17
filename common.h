@@ -13,7 +13,7 @@
 #define LBUFF_SIZE 512
 
 struct LinkBuff{
-    uint8_t buf[LBUFF_SIZE];
+    uint8_t* buf;
     int size;
     LinkBuff* next;
 };

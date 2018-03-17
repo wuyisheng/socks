@@ -26,20 +26,20 @@ Socks5Server::Socks5Server(){
 };
 
 void Socks5Server::forever(uint16_t port){
-    cout << "test" << endl;
+    cout << "start" << endl;
     int fd;
     this->wapper_->create(this);
     this->wapper_->watchTcp(port,&fd,NULL);
     this->wapper_->wait();
 };
 
-void Socks5Server::onAccept(int fd,int type,void* ptr){
+void Socks5Server::onAccept(int fd,int type,void* data){
     struct Section* section =  new Section();
     section->fd = fd;
     section->tcp = type & TYPE_TCP != 0;
     section->status = SS_INIT;
     section->watch_fd = -1;
-    ptr = section;
+    ((struct EpollData*)data)->ptr = section;
 }
 
 void Socks5Server::onDestory(void* ptr,int fd){
@@ -59,10 +59,12 @@ void Socks5Server::onDestory(void* ptr,int fd){
 };
 
 void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
+    cout << "onData:" << fd << ptr << endl;
     if(!ptr || !buf ) return;
     struct Section* section = (struct Section*)ptr;
     switch(section->status){
         case SS_INIT:{
+            cout << "SS_INIT" << fd << endl;
             struct RequestVersion* version = new RequestVersion();
             if(!Socks5::decodeRequestVersion(version,buf)){
                 perror("decode error");
@@ -73,15 +75,20 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
                 this->wapper_->remove(fd);
                 return;
             }
-            uint8_t* buf = Socks5::createReplytVersion();
-            if(send(fd,buf,sizeof(*buf),0) == -1){
+            uint8_t* response = Socks5::createReplytVersion();
+            
+            //TODO here has a bug in response's size
+
+            cout << "response,size:" << sizeof(*response) << endl;
+            if(send(fd,response,sizeof(response),0) == -1){
                 perror("send error");
-                //ignore
+                return;
             }
             section->status = SS_REQUEST;
             break;
         }
         case SS_REQUEST:{
+            cout << "SS_REQUEST" << fd << endl;
             struct Request* request = new Request();
             if(!Socks5::decodeRequest(request,buf)){
                 perror("decode error");
@@ -94,8 +101,8 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
                     request->DST_PORT,
                     &(section->watch_fd),
                     section);
-                uint8_t* buf = Socks5::createReplies(result);
-                if(send(fd,buf,sizeof(buf),0) == -1){
+                uint8_t* response = Socks5::createReplies(result);
+                if(send(fd,response,sizeof(response),0) == -1){
                     perror("send error");
                     //double check
                     //*(this->wapper_)->remove(fd);
@@ -109,6 +116,7 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
             break;
         }
         case SS_REDY:{
+             cout << "SS_REDY" << fd << endl;
             if(section->tcp){
                 if(section->watch_fd < 0) throw "connection not ready!";
                 //forward
