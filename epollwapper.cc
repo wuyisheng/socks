@@ -33,7 +33,7 @@ EpollWapper::EpollWapper(){
 
 int EpollWapper::create(EpollNotify* listener){
     struct epoll_event* event = new epoll_event();
-    struct epoll_event events[] = new epoll_event[MAX_EVENT]();
+    struct epoll_event* events = new epoll_event[MAX_EVENT]();
     this->event_ = event;
     this->events_ = events;
     int epoll_fd;
@@ -65,7 +65,7 @@ NetStatus EpollWapper::watchTcp(uint16_t port,int* fd,void* p){
     }
 
     if(bind(sock_fd,(struct sockaddr *)&local_addr,sizeof(struct sockaddr)) == -1){
-        perror("fail to bind"):
+        perror("fail to bind");
         return NET_FAIL;
     }
     if(listen(sock_fd,MAX_CONNECTION) == -1){
@@ -83,7 +83,7 @@ NetStatus EpollWapper::watchUdp(uint16_t port,int* fd,void* p){
     int sock_fd;
     struct sockaddr_in local_addr;
     if((sock_fd=socket(AF_INET,SOCK_DGRAM,0))==-1){
-        perror("fail to create socket udp"):
+        perror("fail to create socket udp");
         return NET_FAIL;
     }
     this->setNonblocking(sock_fd);
@@ -96,17 +96,17 @@ NetStatus EpollWapper::watchUdp(uint16_t port,int* fd,void* p){
         return NET_FAIL;
     }
     *fd = sock_fd;
-    struct EpollData data = new EpollData();
-    data.type = TYPE_WATCH | TYPE_UDP;
-    data.ptr = p;
-    return this->addIntoEpoll(sock_fd,&data) ? NET_SUCC : NET_FAIL;
+    struct EpollData* data = new EpollData();
+    data->type = TYPE_WATCH | TYPE_UDP;
+    data->ptr = p;
+    return this->addIntoEpoll(sock_fd,data) ? NET_SUCC : NET_FAIL;
 }
 
 NetStatus EpollWapper::createTcp(char* target_ip, uint16_t target_port,int* fd,void* p){
     int sock_fd;
     struct sockaddr_in target;
     if((sock_fd == socket(AF_INET,SOCK_STREAM,0)) == -1){
-        perror("fail to create socket tcp"):
+        perror("fail to create socket tcp");
         return NET_FAIL;
     }
     this->setNonblocking(sock_fd);
@@ -116,7 +116,7 @@ NetStatus EpollWapper::createTcp(char* target_ip, uint16_t target_port,int* fd,v
     target.sin_port = htons(target_port);
 
     if(connect(sock_fd,(struct sockaddr*)&target,sizeof(target)) == -1){
-        perror("fail to connect socket"):
+        perror("fail to connect socket");
         return NET_FAIL;
     }
     *fd = sock_fd;
@@ -130,7 +130,7 @@ NetStatus EpollWapper::createUdp(char* target_ip, uint16_t target_port,int* fd,v
     int sock_fd;
     struct sockaddr_in local_addr;
     if((sock_fd=socket(AF_INET,SOCK_DGRAM,0)) == -1){
-        perror("fail to create socket udp"):
+        perror("fail to create socket udp");
         return NET_FAIL;
     }
     this->setNonblocking(sock_fd);
@@ -138,8 +138,8 @@ NetStatus EpollWapper::createUdp(char* target_ip, uint16_t target_port,int* fd,v
     local_addr.sin_family = AF_INET;
     local_addr.sin_addr.s_addr = inet_addr(target_ip);
     local_addr.sin_port = htons(target_port);
-    if(bind(sock_fd,(struct sockaddr*)local_addr,sizeof(local_addr)) == -1){
-        perror("fail to bind socket udp"):
+    if(bind(sock_fd,(struct sockaddr*)&local_addr,sizeof(local_addr)) == -1){
+        perror("fail to bind socket udp");
         return NET_FAIL;
     }
     *fd = sock_fd;
@@ -151,7 +151,7 @@ NetStatus EpollWapper::createUdp(char* target_ip, uint16_t target_port,int* fd,v
 
 bool EpollWapper::remove(int fd){
     close(fd);
-    return epoll_ctl(this->epoll_fd_,EPOLL_CTL_DEL,NULL) != -1;
+    return epoll_ctl(this->epoll_fd_,EPOLL_CTL_DEL,fd,NULL) != -1;
 }
 
 void EpollWapper::wait(){
@@ -159,10 +159,10 @@ void EpollWapper::wait(){
         throw "epoll not ready,call creat() before wait";
     }
     while(1){
-        int count = epoll_wait(this->epoll_fd_,*this->events_,MAX_EVENT,-1);
+        int count = epoll_wait(this->epoll_fd_,this->events_,MAX_EVENT,-1);
         cout << "connect come" << endl;
         for(int i=0;i<count;i++){
-            struct epoll_event item = (*this->events_)[i];
+            struct epoll_event item = (this->events_)[i];
             int from = item.data.fd;
             void* ptr = item.data.ptr;
             if(item.events & EPOLLERR ||
@@ -170,16 +170,16 @@ void EpollWapper::wait(){
                 item.events & EPOLLIN ||
                 !ptr){
                     perror("error in epoll event");
-                    this->listener_.onDestory(ptr,from);
+                    this->listener_->onDestory(ptr,from);
             }else{
                 struct EpollData* data = (EpollData*)ptr;
-                if(data->isWatch&TYPE_WATCH != 0){
-                    if(data->isWatch&TYPE_TCP != 0){
+                if(data->type&TYPE_WATCH != 0){
+                    if(data->type&TYPE_TCP != 0){
                         this->acceptTcp(from,ptr);
                     }else{//udp
                         this->acceptUdp(from,ptr);
                     }
-                }else if(data->isWatch&TYPE_TCP != 0){
+                }else if(data->type&TYPE_TCP != 0){
                     this->handleTcpData(from,ptr);
                 }else{//udp
                     this->handleUdpData(from,ptr);
@@ -191,11 +191,11 @@ void EpollWapper::wait(){
 
 void EpollWapper::handleTcpData(int fd,void* ptr){
     struct LinkBuff* buf = new LinkBuff(); 
-    struct LinkBuff next = buf;
+    struct LinkBuff* next = buf;
     while(1){
-        int count = read(fd,*next->buf,LBUFF_SIZE);
+        int count = read(fd,next->buf,LBUFF_SIZE);
         if(count == -1){
-            if(error == EAGAIN){
+            if(errno == EAGAIN){
                 continue;
             }else{
                 perror("read error");
@@ -210,16 +210,16 @@ void EpollWapper::handleTcpData(int fd,void* ptr){
             next = next->next;
         }
     }
-    this->listener_.onData(&buf,ptr,from);
+    this->listener_->onData(buf,ptr,fd);
 };
 
 void EpollWapper::handleUdpData(int fd,void* ptr){
     struct LinkBuff* buf = new LinkBuff();
-    struct LinkBuff next = buf;
+    struct LinkBuff* next = buf;
     while(1){
         struct sockaddr_in client_addr;
         socklen_t addrlen = sizeof(client_addr);
-        int count = recvfrom(fd,*next->buf,LBUFF_SIZE,0,(sockaddr*)&client_addr,&addrlen);
+        int count = recvfrom(fd,next->buf,LBUFF_SIZE,0,(sockaddr*)&client_addr,&addrlen);
         if(count <= 0){
             if(errno == ECONNRESET){
                 continue;
@@ -231,7 +231,7 @@ void EpollWapper::handleUdpData(int fd,void* ptr){
             next->size = count;
             struct LinkBuff* tmp = new LinkBuff();
             next->next = tmp;
-            netx = next->next;
+            next = next->next;
         }
     }
 };
@@ -252,7 +252,7 @@ void EpollWapper::acceptTcp(int fd,void* ptr){
         string hbuf(NI_MAXHOST,'\0');
         string sbuf(NI_MAXSERV,'\0');
         if(getnameinfo(&in_addr,in_len,
-            const_cast<char*>(hbuf.data()),hhuf.size(),
+            const_cast<char*>(hbuf.data()),hbuf.size(),
             const_cast<char*>(sbuf.data()),sbuf.size(),
             NI_NUMERICHOST || NI_NUMERICSERV
             ) == 0 ){
@@ -265,7 +265,7 @@ void EpollWapper::acceptTcp(int fd,void* ptr){
         }
         struct EpollData* data = new EpollData();
         data->type = TYPE_TCP;
-        this->listener_.onAccept(in_fd,data->type,data->ptr);
+        this->listener_->onAccept(in_fd,data->type,data->ptr);
         if(!this->addIntoEpoll(in_fd,&data)){
             perror("fail to add into epoll");
             break;
@@ -285,11 +285,11 @@ bool EpollWapper::setNonblocking(int fd){
 }
 
 bool EpollWapper::addIntoEpoll(int fd,void* ptr){
-    struct  epoll_event event = (struct epoll_event)*this->event;
-    event.data.fd = fd;
-    event.data.ptr = ptr;
-    event.events = EPOLLIN | EPOLLET;
-    return epoll_ctl(this->epoll_fd_,EPOLL_CTL_ADD,fd,&event) != -1;
+    struct  epoll_event* event = (struct epoll_event*)this->event_;
+    event->data.fd = fd;
+    event->data.ptr = ptr;
+    event->events = EPOLLIN | EPOLLET;
+    return epoll_ctl(this->epoll_fd_,EPOLL_CTL_ADD,fd,event) != -1;
 }
 
 EpollWapper::~EpollWapper(){

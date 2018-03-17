@@ -12,6 +12,8 @@
 #include <inttypes.h>
 #include "common.h"
 
+#define MAX_CONNECTION 10
+
 #define TYPE_WATCH  1
 #define TYPE_TCP    2
 #define TYPE_UDP    4
@@ -45,7 +47,7 @@ class EpollWapper{
         EpollWapper();
         int create(EpollNotify* listener);
         NetStatus watchTcp(uint16_t port,int* fd,void* ptr);
-        NetStatus watchUdp(uint16_t* port,int* fd,void* ptr);
+        NetStatus watchUdp(uint16_t port,int* fd,void* ptr);
         NetStatus createTcp(char* target_ip, uint16_t target_port,int* fd,void* ptr);
         NetStatus createUdp(char* target_ip, uint16_t target_port,int* fd,void* ptr);
         bool remove(int fd);
@@ -54,7 +56,7 @@ class EpollWapper{
     private:
         EpollNotify* listener_;
         struct epoll_event* event_;
-        struct epoll_event* events_[];
+        struct epoll_event* events_;
         int epoll_fd_;
         bool setNonblocking(int fd);
         bool addIntoEpoll(int fd,void* ptr);
