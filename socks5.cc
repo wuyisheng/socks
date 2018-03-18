@@ -5,6 +5,7 @@
 //  Copyright © 2018 yeshen.org. All rights reserved.
 //
 
+#include <iostream>
 #include <inttypes.h>
 #include <stdlib.h>
 #include <netdb.h>
@@ -74,6 +75,7 @@ namespace Socks5{
             //unsupport
             return false;
         }
+        std::cout << (request->DST_ADDR) << (int)(request->DST_PORT) << std::endl;
         return true;
     };
 

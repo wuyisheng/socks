@@ -107,7 +107,6 @@ NetStatus EpollWapper::createTcp(char* target_ip, uint16_t target_port,int* fd,v
         perror("fail to create socket tcp");
         return NET_FAIL;
     }
-    this->setNonblocking(sock_fd);
     bzero((char*)&target,sizeof(target));
     target.sin_family = AF_INET;
     target.sin_addr.s_addr = inet_addr(target_ip);
@@ -117,6 +116,10 @@ NetStatus EpollWapper::createTcp(char* target_ip, uint16_t target_port,int* fd,v
         perror("fail to connect socket");
         return NET_FAIL;
     }
+
+    //TODO should set nonblock before connect
+    this->setNonblocking(sock_fd);
+
     *fd = sock_fd;
     struct EpollData* data = new EpollData();
     data->type = TYPE_TCP;

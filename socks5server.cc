@@ -36,7 +36,7 @@ void Socks5Server::forever(uint16_t port){
 void Socks5Server::onAccept(int fd,int type,void* data){
     struct Section* section =  new Section();
     section->fd = fd;
-    section->tcp = type & TYPE_TCP != 0;
+    section->tcp = ((type & TYPE_TCP) != 0);
     section->status = SS_INIT;
     section->watch_fd = -1;
     ((struct EpollData*)data)->ptr = section;
@@ -76,11 +76,7 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
                 return;
             }
             uint8_t* response = Socks5::createReplytVersion();
-            
-            //TODO here has a bug in response's size
-
-            cout << "response,size:" << sizeof(*response) << endl;
-            if(send(fd,response,sizeof(response),0) == -1){
+            if(send(fd,response,2,0) == -1){
                 perror("send error");
                 return;
             }
@@ -102,7 +98,7 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
                     &(section->watch_fd),
                     section);
                 uint8_t* response = Socks5::createReplies(result);
-                if(send(fd,response,sizeof(response),0) == -1){
+                if(send(fd,response,10,0) == -1){
                     perror("send error");
                     //double check
                     //*(this->wapper_)->remove(fd);
@@ -122,13 +118,16 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
                 //forward
                 int to_fd = fd == section->fd ? section->watch_fd : section->fd;
                 struct LinkBuff* next = buf;
+                cout << "to:" << to_fd << ",from:" << fd;
                 while(next){
+                    cout << "forwarding" << next->size << endl;
                     if(send(to_fd,next->buf,next->size,0) == -1){
                         perror("send error");
                     }
                     next = next->next;
                 }
             }else{
+                cout << "udp: forwarding" << endl;
                 //udp associate
                 //TODO
             }
