@@ -1,5 +1,5 @@
-all : socks5server.o socks5.o epollwapper.o proxy.o client.o 
-	g++ -o socks5server socks5server.o socks5.o epollwapper.o -g -ggdb
+all : socks5server.o socks5.o epollwapper.o proxy.o client.o common.o
+	g++ -o socks5server socks5server.o socks5.o epollwapper.o  common.o -g -ggdb
 	g++ -o proxy proxy.o client.o
 
 socks5server.o: socks5server.cc socks5server.h epollwapper.h socks5.h common.h

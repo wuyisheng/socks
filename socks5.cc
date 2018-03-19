@@ -15,6 +15,8 @@
 #include "socks5.h"
 #include "common.h"
 
+using namespace std;
+
 namespace Socks5{
     bool decodeRequestVersion(struct RequestVersion* version,struct LinkBuff* buf){
         if(!version || !buf) return false;

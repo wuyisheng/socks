@@ -18,4 +18,8 @@ struct LinkBuff{
     LinkBuff* next;
 };
 
+namespace LinkBuffUtil{
+    void dofree(struct LinkBuff* ptr);
+};
+
 #endif

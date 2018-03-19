@@ -172,11 +172,10 @@ void EpollWapper::wait(){
                 void* pointer = data->ptr;
                 int from = data->fd;
                 if(events[i].events & EPOLLERR ||
-                    events[i].events & EPOLLHUP ||
-                    !(events[i].events & EPOLLIN) ){
-                        perror("error in epoll event");
+                    events[i].events & EPOLLHUP){
                         this->listener_->onDestory(pointer,from);
-                }else{
+                }else if(events[i].events & EPOLLIN){
+                    //readable
                     if((data->type&TYPE_WATCH) != '\x00'){
                         if((data->type&TYPE_TCP) != '\x00'){
                             this->acceptTcp(from,pointer);
@@ -188,6 +187,9 @@ void EpollWapper::wait(){
                     }else{//udp
                         this->handleUdpData(from,pointer);
                     }
+                }else if(events[i].events & EPOLLOUT){
+                    //writable
+                    this->listener_->onWritable(pointer,from);
                 }
             }
         }
@@ -296,7 +298,7 @@ bool EpollWapper::setNonblocking(int fd){
 bool EpollWapper::addIntoEpoll(int fd,void* ptr){
     struct epoll_event event = *(this->event_);
     event.data.ptr = ptr;
-    event.events = EPOLLIN | EPOLLET;
+    event.events = EPOLLOUT | EPOLLIN | EPOLLET;
     return epoll_ctl(this->epoll_fd_,EPOLL_CTL_ADD,fd,&event) != -1;
 }
 

@@ -19,6 +19,7 @@ class Socks5Server: public EpollNotify{
         void forever(uint16_t port);
         virtual void onAccept(int fd,int type,void* ptr);
         virtual void onData(struct LinkBuff* buf,void* ptr,int fd);
+        virtual void onWritable(void* ptr,int fd);
         virtual void onDestory(void* data,int fd);
 };
 

@@ -33,6 +33,8 @@ struct Section{
     SectionStatus status;
     int watch_fd;
     UDPPair *udp;
+    struct LinkBuff* insidebuff;
+    struct LinkBuff* outsidebuff;
 };
 
 struct RequestVersion{

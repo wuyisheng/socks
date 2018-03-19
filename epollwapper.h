@@ -40,6 +40,7 @@ class EpollNotify{
     public:
         virtual void onAccept(int fd,int type,void* ptr) = 0;
         virtual void onData(struct LinkBuff* buf,void* ptr,int fd) = 0;
+        virtual void onWritable(void* ptr,int fd) = 0;
         virtual void onDestory(void* data,int fd) = 0;
 };
 

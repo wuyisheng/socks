@@ -1,3 +1,5 @@
 *.o
 server
+socks5server
+proxy
 .vscode/

@@ -5,6 +5,7 @@
 //  Copyright © 2018 yeshen.org. All rights reserved.
 //
 
+#include <stdlib.h>
 #include <iostream>
 #include <inttypes.h>
 #include <netinet/in.h>
@@ -18,6 +19,7 @@
 #include "socks5server.h"
 #include "epollwapper.h"
 #include "socks5.h"
+#include "common.h"
 
 using namespace std;
 
@@ -58,6 +60,37 @@ void Socks5Server::onDestory(void* ptr,int fd){
     delete section;
 };
 
+void Socks5Server::onWritable(void* ptr,int fd){
+    if(!ptr || fd < 0)return;
+    struct Section* section = (struct Section*)ptr;
+    if(section->status==SS_REDY){
+        if(section->tcp){
+            int to_fd = fd == section->fd ? section->watch_fd : section->fd;
+            struct LinkBuff* next = fd == section->fd ? section->insidebuff : section->outsidebuff;
+            cout << "to:" << to_fd << ",from:" << fd;
+            while(next){
+                if(send(fd,next->buf,next->size,0) == -1){
+                    if(errno==EAGAIN){
+                        if(fd==section->fd){
+                            section->insidebuff = next;
+                        }else{
+                            section->outsidebuff = next;
+                        }
+                        return;
+                    }
+                }else{
+                    struct LinkBuff* tmp = next->next;
+                    free(next->buf);
+                    delete next;
+                    next=tmp;
+                }
+            }
+        }else{
+
+        }
+    }
+}
+
 void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
     cout << "onData:" << fd << ptr << endl;
     if(!ptr || !buf ) return;
@@ -69,18 +102,22 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
             if(!Socks5::decodeRequestVersion(version,buf)){
                 perror("decode error");
                 this->wapper_->remove(fd);
+                LinkBuffUtil::dofree(buf);
                 return;
             }
             if(version->VER != ACCEPT_VERSION){
                 this->wapper_->remove(fd);
+                LinkBuffUtil::dofree(buf);
                 return;
             }
             uint8_t* response = Socks5::createReplytVersion();
             if(send(fd,response,2,0) == -1){
                 perror("send error");
+                LinkBuffUtil::dofree(buf);
                 return;
             }
             section->status = SS_REQUEST;
+            LinkBuffUtil::dofree(buf);
             break;
         }
         case SS_REQUEST:{
@@ -89,6 +126,7 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
             if(!Socks5::decodeRequest(request,buf)){
                 perror("decode error");
                 this->wapper_->remove(fd);
+                LinkBuffUtil::dofree(buf);
                 return;
             }
             if(request->CMD == '\x01'){
@@ -102,6 +140,7 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
                     perror("send error");
                     //double check
                     //*(this->wapper_)->remove(fd);
+                    LinkBuffUtil::dofree(buf);
                     return;
                 }
                 section->status = SS_REDY;
@@ -109,22 +148,47 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
                 // uint8_t result = this->wapper_->watchUdp ...
 
             }
+            LinkBuffUtil::dofree(buf);
             break;
         }
         case SS_REDY:{
-             cout << "SS_REDY" << fd << endl;
+            cout << "SS_REDY" << fd << endl;
             if(section->tcp){
                 if(section->watch_fd < 0) throw "connection not ready!";
-                //forward
                 int to_fd = fd == section->fd ? section->watch_fd : section->fd;
-                struct LinkBuff* next = buf;
-                cout << "to:" << to_fd << ",from:" << fd;
-                while(next){
-                    cout << "forwarding" << next->size << endl;
-                    if(send(to_fd,next->buf,next->size,0) == -1){
-                        perror("send error");
+                //forward
+                struct LinkBuff* cache = fd==section->fd ? section->insidebuff : section->outsidebuff;
+                struct LinkBuff* next;
+                if(cache){
+                    next = cache;
+                    while(next->next){
+                        next=next->next;
                     }
-                    next = next->next;
+                    next->next=buf;
+                    next = cache;
+                }else{
+                    next = buf;
+                }
+                cout << "try send:" << fd << ","<< next->size << endl;
+                while(next){
+                    if(send(to_fd,next->buf,next->size,0) == -1){
+                        if(errno==EAGAIN){
+                            if(fd==section->fd){
+                                section->insidebuff = next;
+                            }else{
+                                section->outsidebuff = next;
+                            }
+                            return;
+                        }else{
+                            perror("send error");
+                            return;
+                        }
+                    }else{
+                        struct LinkBuff* tmp = next->next;
+                        free(next->buf);
+                        delete next;
+                        next=tmp;
+                    }
                 }
             }else{
                 cout << "udp: forwarding" << endl;
@@ -140,14 +204,6 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
         default:{
             break;
         }
-    }
-    //clean buffer
-    struct LinkBuff* next = buf;
-    struct LinkBuff* tmp;
-    while(next){
-        tmp = next->next;
-        delete next;
-        next = tmp;
     }
 };
 
