@@ -207,7 +207,17 @@ void Socks5Server::onData(struct LinkBuff* buf,void* ptr,int fd){
     }
 };
 
+static volatile int keepRunning = 1;
+
+void sig_handler(int sig){
+    if(sig == SIGINT){
+        keepRunning = 0;
+    }
+}
+
 int main(int argc, const char * argv[]) {
+    signal(SIGINT,sig_handler);
+
     Socks5Server* server=new Socks5Server();
     server->forever((uint16_t)1080);
 }
