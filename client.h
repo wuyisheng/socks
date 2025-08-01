@@ -13,12 +13,12 @@
 class Client
 {
 private:
-    int port;
-    const char * ip; 
+  const char *port;
+  const char *ip;
+
 public:
-    Client();
-    Client(const char * ip,int port);
-    void run();
+  Client(const char *ip, const char *port);
+  void run();
 };
 
 #endif
